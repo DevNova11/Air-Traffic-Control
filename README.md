@@ -170,21 +170,6 @@ status bar's *Credits left* tooltip shows the projected daily use. All details a
 
 ---
 
-## Deployment
-
-The app is a standard Next.js project. To deploy to Vercel (or any Node host):
-
-1. Import the repository and set `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` (optional).
-2. Build with `npm run build`, run with `npm start`.
-
-Notes:
-
-- On serverless platforms the proxy's in-memory cache is per instance. It still dedupes most traffic, but a shared
-  store such as Redis or Vercel KV would be the next step.
-- `data/recorded/**` is included in the function bundle via `outputFileTracingIncludes` in `next.config.mjs`.
-- OpenSky blocks or limits some cloud provider IP ranges for anonymous access. If the deployed proxy gets errors, set
-  credentials. Until then the app falls back to recorded data and says so in the status bar.
-
 ## Known limitations
 
 - The recordings in `data/recorded` cover Central Europe (44–52°N, 0–16°E). Other regions show no aircraft in recorded
