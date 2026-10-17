@@ -351,7 +351,10 @@ export async function getStates(requested: BBox, simulate?: SimulationMode): Pro
         : err instanceof Error
           ? err.message
           : 'OpenSky request failed';
-    return fallback(msg, null);
+    // Node's fetch hides the network reason (refused, reset, DNS…) in `cause`; surface it.
+    const cause = err instanceof Error ? (err.cause as { code?: string; message?: string } | undefined) : undefined;
+    const detail = cause?.code ?? cause?.message;
+    return fallback(detail ? `${msg} (${detail})` : msg, null);
   }
 }
 
