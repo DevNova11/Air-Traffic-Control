@@ -4,6 +4,8 @@ A real-time air traffic monitoring dashboard built on the [OpenSky Network REST 
 Pick a region, watch every aircraft in it move on an interactive map, inspect each aircraft's recent track, replay what the app has
 observed, and set up alerts. It keeps working when OpenSky is slow, stale, rate-limited, or down.
 
+**Live demo:** https://air-traffic-control-omega.vercel.app
+
 **Stack:** Next.js 15 (App Router) · TypeScript · Leaflet (custom canvas layer) · Zustand · IndexedDB
 
 ---
