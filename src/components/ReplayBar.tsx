@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { fmtAge, fmtClock } from '@/lib/format';
 import { useTraffic } from '@/store/traffic';
+import { Icon, Select } from './ui';
 
 const SPEEDS = [1, 4, 8, 16, 32];
 
@@ -39,8 +40,9 @@ export default function ReplayBar() {
 
   if (frames.length < 2) {
     return (
-      <div className="replay-bar compact">
-        <span className="muted">Replay becomes available after two updates ({frames.length}/2 collected)</span>
+      <div className="replay compact idle glass">
+        <Icon name="replay" size={16} />
+        Replay available after {2 - frames.length} more update{frames.length === 1 ? '' : 's'}
       </div>
     );
   }
@@ -51,41 +53,49 @@ export default function ReplayBar() {
 
   if (!replay.active) {
     return (
-      <div className="replay-bar compact">
-        <button className="btn" onClick={() => setReplay({ active: true, playing: true, t: start })}>
-          ▶ Replay
+      <div className="replay compact glass">
+        <button className="round-button small" onClick={() => setReplay({ active: true, playing: true, t: start })} aria-label="Start replay">
+          <Icon name="play" size={14} />
         </button>
-        <span className="muted">
-          {frames.length} snapshots · last {fmtAge(end - start)}
+        <span>
+          Replay {frames.length} updates · {fmtAge(end - start)}
         </span>
       </div>
     );
   }
 
+  const progress = ((replay.t - start) / (end - start || 1)) * 100;
+
   return (
-    <div className="replay-bar">
-      <button className="btn" onClick={() => setReplay({ playing: !replay.playing, t: replay.t >= end ? start : replay.t })}>
-        {replay.playing ? '❚❚' : '▶'}
+    <div className="replay glass">
+      <button
+        className="round-button"
+        onClick={() => setReplay({ playing: !replay.playing, t: replay.t >= end ? start : replay.t })}
+        aria-label={replay.playing ? 'Pause' : 'Play'}
+      >
+        <Icon name={replay.playing ? 'pause' : 'play'} size={16} />
       </button>
       <input
-        className="replay-range"
+        className="range"
         type="range"
         min={start}
         max={end}
         step={1}
         value={replay.t}
+        style={{ ['--p' as string]: `${progress}%` }}
         onChange={(e) => setReplay({ t: Number(e.target.value), playing: false })}
+        aria-label="Replay position"
       />
-      <span className="mono">{fmtClock(toWall(replay.t))}</span>
-      <select value={replay.speed} onChange={(e) => setReplay({ speed: Number(e.target.value) })}>
+      <span className="replay-time">{fmtClock(toWall(replay.t))}</span>
+      <Select className="tinted compact" value={replay.speed} onChange={(e) => setReplay({ speed: Number(e.target.value) })} aria-label="Playback speed">
         {SPEEDS.map((s) => (
           <option key={s} value={s}>
             {s}×
           </option>
         ))}
-      </select>
-      <button className="btn" onClick={() => setReplay({ active: false, playing: false })}>
-        Back to live
+      </Select>
+      <button className="pill-button" onClick={() => setReplay({ active: false, playing: false })}>
+        Live
       </button>
     </div>
   );

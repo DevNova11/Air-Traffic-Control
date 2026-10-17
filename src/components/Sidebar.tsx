@@ -1,245 +1,64 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ALERT_KINDS } from '@/lib/alerts';
+import { ALERT_KINDS, RULE_PREFIX } from '@/lib/alerts';
 import { altColor, fmtAlt, fmtClock, fmtSpeed, POSITION_SOURCES } from '@/lib/format';
 import { bboxArea, creditCost, isValidBBox, REGIONS, sameBBox } from '@/lib/geo';
 import { currentViewBBox } from '@/lib/mapView';
 import { trackAltitudeM } from '@/lib/tracks';
 import type { AlertKind, AlertRule, BBox, Track } from '@/lib/types';
 import { selectFilteredTracks, useTraffic } from '@/store/traffic';
+import { Group, Icon, Row, Segmented, Select, Switch } from './ui';
 
-type Tab = 'region' | 'filters' | 'aircraft' | 'alerts';
+type Tab = 'aircraft' | 'region' | 'filters' | 'alerts';
+
+const TITLES: Record<Tab, string> = {
+  aircraft: 'Aircraft',
+  region: 'Region',
+  filters: 'Filters',
+  alerts: 'Alerts',
+};
 
 export default function Sidebar() {
   const [tab, setTab] = useState<Tab>('aircraft');
-  const [open, setOpen] = useState(true);
+  const open = useTraffic((s) => s.sidebarOpen);
   const unread = useTraffic((s) => s.unreadAlerts);
 
-  return (
-    <aside className={`sidebar ${open ? '' : 'collapsed'}`}>
-      <button className="sidebar-toggle" onClick={() => setOpen(!open)} aria-label="Toggle sidebar">
-        {open ? '‹' : '›'}
-      </button>
-      {open && (
-        <>
-          <nav className="tabs">
-            {(['region', 'filters', 'aircraft', 'alerts'] as Tab[]).map((t) => (
-              <button
-                key={t}
-                className={`tab ${tab === t ? 'active' : ''}`}
-                onClick={() => {
-                  setTab(t);
-                  if (t === 'alerts') useTraffic.getState().markAlertsRead();
-                }}
-              >
-                {t[0].toUpperCase() + t.slice(1)}
-                {t === 'alerts' && unread > 0 && <span className="badge">{unread}</span>}
-              </button>
-            ))}
-          </nav>
-          <div className="tab-body">
-            {tab === 'region' && <RegionTab />}
-            {tab === 'filters' && <FiltersTab />}
-            {tab === 'aircraft' && <AircraftTab />}
-            {tab === 'alerts' && <AlertsTab />}
-          </div>
-        </>
-      )}
-    </aside>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function RegionTab() {
-  const region = useTraffic((s) => s.region);
-  const setRegion = useTraffic((s) => s.setRegion);
-  const [custom, setCustom] = useState<BBox>(region.bbox);
-  const [error, setError] = useState<string | null>(null);
-
-  const applyCustom = (b: BBox, name = 'Custom area') => {
-    if (!isValidBBox(b)) {
-      setError('Invalid bounds: latitude −90…90, longitude −180…180, min < max.');
-      return;
-    }
-    setError(null);
-    setCustom(b);
-    setRegion({ id: `custom-${Date.now()}`, name, bbox: b });
+  const choose = (t: Tab) => {
+    setTab(t);
+    if (t === 'alerts') useTraffic.getState().markAlertsRead();
   };
 
   return (
-    <div className="stack">
-      <p className="hint">
-        Only aircraft inside the monitored region are requested. Larger regions cost more OpenSky credits per
-        request.
-      </p>
-      <div className="region-list">
-        {REGIONS.map((r) => (
-          <button
-            key={r.id}
-            className={`region-btn ${sameBBox(r.bbox, region.bbox) ? 'active' : ''}`}
-            onClick={() => {
-              setCustom(r.bbox);
-              setRegion(r);
-            }}
-          >
-            <span>{r.name}</span>
-            <span className="muted">{creditCost(r.bbox)} cr</span>
-          </button>
-        ))}
+    <aside className={`sidebar glass ${open ? '' : 'hidden'}`} aria-hidden={!open}>
+      <div className="sidebar-head">
+        <h1 className="sidebar-title">{TITLES[tab]}</h1>
+        <Segmented<Tab>
+          value={tab}
+          onChange={choose}
+          options={[
+            { value: 'aircraft', label: 'Aircraft' },
+            { value: 'region', label: 'Region' },
+            { value: 'filters', label: 'Filters' },
+            {
+              value: 'alerts',
+              label: (
+                <>
+                  Alerts
+                  {unread > 0 && tab !== 'alerts' && <span className="count-badge">{unread}</span>}
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
-
-      <button
-        className="btn wide"
-        onClick={() => {
-          const b = currentViewBBox();
-          if (b) applyCustom(b, 'Map view');
-        }}
-      >
-        Monitor current map view
-      </button>
-
-      <fieldset className="fieldset">
-        <legend>Custom bounds</legend>
-        <div className="grid2">
-          {(['lamin', 'lamax', 'lomin', 'lomax'] as const).map((k) => (
-            <label key={k} className="field">
-              <span>{{ lamin: 'Lat min', lamax: 'Lat max', lomin: 'Lon min', lomax: 'Lon max' }[k]}</span>
-              <input
-                type="number"
-                step="0.1"
-                value={custom[k]}
-                onChange={(e) => setCustom({ ...custom, [k]: Number(e.target.value) })}
-              />
-            </label>
-          ))}
-        </div>
-        <button className="btn wide" onClick={() => applyCustom(custom)}>
-          Apply bounds
-        </button>
-        {error && <p className="error-text">{error}</p>}
-      </fieldset>
-
-      <SimulateControl />
-
-      <div className="kv">
-        <span>Monitoring</span>
-        <b>{region.name}</b>
-        <span>Area</span>
-        <b>{Math.round(bboxArea(region.bbox))} sq°</b>
-        <span>Cost</span>
-        <b>{creditCost(region.bbox)} credit(s) / request</b>
+      <div className="sidebar-body">
+        {tab === 'aircraft' && <AircraftTab />}
+        {tab === 'region' && <RegionTab />}
+        {tab === 'filters' && <FiltersTab />}
+        {tab === 'alerts' && <AlertsTab />}
       </div>
-    </div>
-  );
-}
-
-function SimulateControl() {
-  const simulate = useTraffic((s) => s.simulate);
-  return (
-    <fieldset className="fieldset">
-      <legend>Resilience testing</legend>
-      <select
-        value={simulate}
-        onChange={(e) => useTraffic.getState().setSimulate(e.target.value as typeof simulate)}
-      >
-        <option value="">Normal operation</option>
-        <option value="outage">Simulate OpenSky outage</option>
-        <option value="ratelimit">Simulate rate limit (429)</option>
-        <option value="recorded">Serve recorded data</option>
-        <option value="down">Simulate proxy failure</option>
-      </select>
-      <p className="hint">Injected at the proxy; no OpenSky credits are spent while active.</p>
-    </fieldset>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function numOrNull(v: string): number | null {
-  return v.trim() === '' || !Number.isFinite(Number(v)) ? null : Number(v);
-}
-
-function FiltersTab() {
-  const filters = useTraffic((s) => s.filters);
-  const tracks = useTraffic((s) => s.tracks);
-  const { setFilters, resetFilters } = useTraffic.getState();
-  const countries = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of tracks.values()) m.set(t.latest.originCountry, (m.get(t.latest.originCountry) ?? 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [tracks]);
-
-  return (
-    <div className="stack">
-      <label className="field">
-        <span>Search callsign / ICAO24 / squawk</span>
-        <input value={filters.query} placeholder="e.g. SWR, 4b1814, 7700" onChange={(e) => setFilters({ query: e.target.value })} />
-      </label>
-      <label className="field">
-        <span>Origin country</span>
-        <select value={filters.country} onChange={(e) => setFilters({ country: e.target.value })}>
-          <option value="">All countries</option>
-          {countries.map(([c, n]) => (
-            <option key={c} value={c}>
-              {c} ({n})
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="grid2">
-        <label className="field">
-          <span>Min altitude (ft)</span>
-          <input type="number" value={filters.minAltFt ?? ''} onChange={(e) => setFilters({ minAltFt: numOrNull(e.target.value) })} />
-        </label>
-        <label className="field">
-          <span>Max altitude (ft)</span>
-          <input type="number" value={filters.maxAltFt ?? ''} onChange={(e) => setFilters({ maxAltFt: numOrNull(e.target.value) })} />
-        </label>
-        <label className="field">
-          <span>Min speed (kt)</span>
-          <input type="number" value={filters.minSpeedKt ?? ''} onChange={(e) => setFilters({ minSpeedKt: numOrNull(e.target.value) })} />
-        </label>
-        <label className="field">
-          <span>Max speed (kt)</span>
-          <input type="number" value={filters.maxSpeedKt ?? ''} onChange={(e) => setFilters({ maxSpeedKt: numOrNull(e.target.value) })} />
-        </label>
-      </div>
-      <label className="field">
-        <span>Position source</span>
-        <select value={filters.positionSource} onChange={(e) => setFilters({ positionSource: Number(e.target.value) })}>
-          <option value={-1}>Any</option>
-          {POSITION_SOURCES.map((p, i) => (
-            <option key={p} value={i}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="toggle">
-        <input type="checkbox" checked={filters.showOnGround} onChange={(e) => setFilters({ showOnGround: e.target.checked })} />
-        Show aircraft on ground
-      </label>
-      <label className="toggle">
-        <input type="checkbox" checked={filters.showStale} onChange={(e) => setFilters({ showStale: e.target.checked })} />
-        Show stale / temporarily lost aircraft
-      </label>
-      <TrailsToggle />
-      <button className="btn wide" onClick={resetFilters}>
-        Reset filters
-      </button>
-    </div>
-  );
-}
-
-function TrailsToggle() {
-  const showTrails = useTraffic((s) => s.showTrails);
-  return (
-    <label className="toggle">
-      <input type="checkbox" checked={showTrails} onChange={(e) => useTraffic.getState().setShowTrails(e.target.checked)} />
-      Show short trails for all aircraft
-    </label>
+    </aside>
   );
 }
 
@@ -252,6 +71,7 @@ function AircraftTab() {
   const tracks = useTraffic((s) => s.tracks);
   const filters = useTraffic((s) => s.filters);
   const selectedId = useTraffic((s) => s.selectedId);
+  const { setFilters, select } = useTraffic.getState();
   const [sort, setSort] = useState<SortKey>('callsign');
 
   const rows = useMemo(() => {
@@ -272,34 +92,253 @@ function AircraftTab() {
   }, [tracks, filters, sort]);
 
   return (
-    <div className="stack fill">
-      <div className="row between">
-        <span className="muted">
-          {rows.length > LIST_LIMIT ? `Showing ${LIST_LIMIT} of ${rows.length}` : `${rows.length} aircraft`}
+    <>
+      <label className="search">
+        <Icon name="search" size={16} />
+        <input
+          value={filters.query}
+          placeholder="Callsign, ICAO24 or squawk"
+          onChange={(e) => setFilters({ query: e.target.value })}
+          aria-label="Search aircraft"
+        />
+        {filters.query && (
+          <button className="clear" onClick={() => setFilters({ query: '' })} aria-label="Clear search">
+            <Icon name="close" size={10} />
+          </button>
+        )}
+      </label>
+
+      <div className="list-meta">
+        <span>
+          {rows.length > LIST_LIMIT ? `${LIST_LIMIT} of ${rows.length.toLocaleString()}` : `${rows.length.toLocaleString()} aircraft`}
         </span>
-        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-          <option value="callsign">Callsign</option>
-          <option value="altitude">Altitude</option>
-          <option value="speed">Speed</option>
-          <option value="seen">Recently updated</option>
-        </select>
+        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort by">
+          <option value="callsign">Sort by Callsign</option>
+          <option value="altitude">Sort by Altitude</option>
+          <option value="speed">Sort by Speed</option>
+          <option value="seen">Sort by Last Update</option>
+        </Select>
       </div>
-      <ul className="ac-list">
-        {rows.slice(0, LIST_LIMIT).map((t) => (
-          <li
-            key={t.icao24}
-            className={`ac-row ${t.icao24 === selectedId ? 'selected' : ''} ${t.status}`}
-            onClick={() => useTraffic.getState().select(t.icao24)}
+
+      {rows.length === 0 ? (
+        <div className="group-body empty">No aircraft match.</div>
+      ) : (
+        <div className="group-body">
+          {rows.slice(0, LIST_LIMIT).map((t) => {
+            const alt = trackAltitudeM(t.latest);
+            const color = altColor(alt, t.latest.onGround);
+            return (
+              <Row
+                key={t.icao24}
+                className={`ac-cell ${t.icao24 === selectedId ? 'selected' : ''} ${t.status}`}
+                onClick={() => select(t.icao24)}
+              >
+                <span className="ac-glyph" style={{ background: color, color: t.status === 'stale' ? color : undefined }}>
+                  <Icon name="airplane" size={16} className="" />
+                </span>
+                <span className="ac-main">
+                  <span className="ac-title">{t.latest.callsign ?? t.icao24.toUpperCase()}</span>
+                  <span className="ac-sub">
+                    {t.status === 'stale' ? 'Stale · ' : ''}
+                    {t.latest.originCountry}
+                  </span>
+                </span>
+                <span className="ac-side">
+                  <span>{fmtAlt(alt, t.latest.onGround)}</span>
+                  <span className="ac-side-sub">{fmtSpeed(t.latest.velocity)}</span>
+                </span>
+              </Row>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function RegionTab() {
+  const region = useTraffic((s) => s.region);
+  const setRegion = useTraffic((s) => s.setRegion);
+  const [custom, setCustom] = useState<BBox>(region.bbox);
+  const [error, setError] = useState<string | null>(null);
+
+  const applyCustom = (b: BBox, name = 'Custom Area') => {
+    if (!isValidBBox(b)) {
+      setError('Latitude must be −90…90, longitude −180…180, and each minimum below its maximum.');
+      return;
+    }
+    setError(null);
+    setCustom(b);
+    setRegion({ id: `custom-${Date.now()}`, name, bbox: b });
+  };
+
+  const isPreset = REGIONS.some((r) => sameBBox(r.bbox, region.bbox));
+
+  return (
+    <>
+      <Group
+        header="Monitored Region"
+        footer="Only aircraft inside this region are requested. Larger regions cost more OpenSky credits per request."
+      >
+        {REGIONS.map((r) => (
+          <Row
+            key={r.id}
+            onClick={() => {
+              setCustom(r.bbox);
+              setRegion(r);
+            }}
           >
-            <span className="swatch" style={{ background: altColor(trackAltitudeM(t.latest), t.latest.onGround) }} />
-            <span className="ac-call">{t.latest.callsign ?? t.icao24}</span>
-            <span className="ac-alt">{fmtAlt(trackAltitudeM(t.latest), t.latest.onGround)}</span>
-            <span className="ac-spd">{fmtSpeed(t.latest.velocity)}</span>
-            {t.status === 'stale' && <span className="tag">stale</span>}
-          </li>
+            <span className="row-label">{r.name}</span>
+            <span className="row-detail">{creditCost(r.bbox)} cr</span>
+            <span style={{ width: 18 }}>{sameBBox(r.bbox, region.bbox) && <Icon name="check" size={18} className="check" />}</span>
+          </Row>
         ))}
-      </ul>
-    </div>
+        {!isPreset && (
+          <Row>
+            <span className="row-label">{region.name}</span>
+            <span className="row-detail">{creditCost(region.bbox)} cr</span>
+            <Icon name="check" size={18} className="check" />
+          </Row>
+        )}
+      </Group>
+
+      <button
+        className="filled-button"
+        onClick={() => {
+          const b = currentViewBBox();
+          if (b) applyCustom(b, 'Map View');
+        }}
+      >
+        <Icon name="location" size={17} />
+        Monitor Current Map View
+      </button>
+
+      <Group header="Custom Bounds" footer={error ? <span className="error-text">{error}</span> : undefined}>
+        {(['lamin', 'lamax', 'lomin', 'lomax'] as const).map((k) => (
+          <Row key={k} label={{ lamin: 'Latitude min', lamax: 'Latitude max', lomin: 'Longitude min', lomax: 'Longitude max' }[k]}>
+            <input
+              type="number"
+              step="0.1"
+              value={custom[k]}
+              onChange={(e) => setCustom({ ...custom, [k]: Number(e.target.value) })}
+              aria-label={k}
+            />
+          </Row>
+        ))}
+        <Row className="button-cell" onClick={() => applyCustom(custom)}>
+          Apply Bounds
+        </Row>
+      </Group>
+
+      <Group header="Current">
+        <Row label="Area" detail={`${Math.round(bboxArea(region.bbox)).toLocaleString()} sq°`} />
+        <Row label="Cost per request" detail={`${creditCost(region.bbox)} credit${creditCost(region.bbox) > 1 ? 's' : ''}`} />
+      </Group>
+
+      <SimulateGroup />
+    </>
+  );
+}
+
+function SimulateGroup() {
+  const simulate = useTraffic((s) => s.simulate);
+  return (
+    <Group header="Resilience Testing" footer="Injected at the proxy. No OpenSky credits are spent while a simulation is active.">
+      <Row label="Mode">
+        <Select value={simulate} onChange={(e) => useTraffic.getState().setSimulate(e.target.value as typeof simulate)}>
+          <option value="">Normal</option>
+          <option value="outage">OpenSky outage</option>
+          <option value="ratelimit">Rate limit (429)</option>
+          <option value="recorded">Recorded data</option>
+          <option value="down">Proxy failure</option>
+        </Select>
+      </Row>
+    </Group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function numOrNull(v: string): number | null {
+  return v.trim() === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+}
+
+function FiltersTab() {
+  const filters = useTraffic((s) => s.filters);
+  const tracks = useTraffic((s) => s.tracks);
+  const showTrails = useTraffic((s) => s.showTrails);
+  const { setFilters, resetFilters, setShowTrails } = useTraffic.getState();
+  const countries = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of tracks.values()) m.set(t.latest.originCountry, (m.get(t.latest.originCountry) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [tracks]);
+
+  const num = (key: 'minAltFt' | 'maxAltFt' | 'minSpeedKt' | 'maxSpeedKt', placeholder: string) => (
+    <input
+      type="number"
+      placeholder={placeholder}
+      value={filters[key] ?? ''}
+      onChange={(e) => setFilters({ [key]: numOrNull(e.target.value) })}
+      aria-label={key}
+    />
+  );
+
+  return (
+    <>
+      <Group header="Aircraft">
+        <Row label="Country">
+          <Select value={filters.country} onChange={(e) => setFilters({ country: e.target.value })}>
+            <option value="">All</option>
+            {countries.map(([c, n]) => (
+              <option key={c} value={c}>
+                {c} ({n})
+              </option>
+            ))}
+          </Select>
+        </Row>
+        <Row label="Position source">
+          <Select value={filters.positionSource} onChange={(e) => setFilters({ positionSource: Number(e.target.value) })}>
+            <option value={-1}>Any</option>
+            {POSITION_SOURCES.map((p, i) => (
+              <option key={p} value={i}>
+                {p}
+              </option>
+            ))}
+          </Select>
+        </Row>
+      </Group>
+
+      <Group header="Altitude (ft)">
+        <Row label="Minimum">{num('minAltFt', 'None')}</Row>
+        <Row label="Maximum">{num('maxAltFt', 'None')}</Row>
+      </Group>
+
+      <Group header="Ground Speed (kt)">
+        <Row label="Minimum">{num('minSpeedKt', 'None')}</Row>
+        <Row label="Maximum">{num('maxSpeedKt', 'None')}</Row>
+      </Group>
+
+      <Group header="Display" footer="Stale aircraft have an outdated position or are temporarily missing from the feed.">
+        <Row label="Aircraft on ground">
+          <Switch checked={filters.showOnGround} onChange={(v) => setFilters({ showOnGround: v })} label="Show aircraft on ground" />
+        </Row>
+        <Row label="Stale aircraft">
+          <Switch checked={filters.showStale} onChange={(v) => setFilters({ showStale: v })} label="Show stale aircraft" />
+        </Row>
+        <Row label="Trails">
+          <Switch checked={showTrails} onChange={setShowTrails} label="Show trails for all aircraft" />
+        </Row>
+      </Group>
+
+      <Group>
+        <Row className="button-cell destructive" onClick={resetFilters}>
+          Reset Filters
+        </Row>
+      </Group>
+    </>
   );
 }
 
@@ -327,66 +366,84 @@ function AlertsTab() {
   };
 
   return (
-    <div className="stack fill">
-      <p className="hint">Alerts are checked on every update and fire once when an aircraft starts matching a rule.</p>
-      <ul className="rule-list">
+    <>
+      <Group header="Rules" footer="Each rule fires once when an aircraft starts matching it.">
+        {rules.length === 0 && <div className="empty">No rules.</div>}
         {rules.map((r) => (
-          <li key={r.id} className="rule">
-            <input type="checkbox" checked={r.enabled} onChange={(e) => update(r.id, { enabled: e.target.checked })} />
-            <span className="rule-label">{r.kind === 'enter-zone' ? `Enters ${r.label}` : meta(r.kind).label}</span>
-            {meta(r.kind).needsValue && (
-              <input
-                className="rule-value"
-                type="number"
-                value={r.value}
-                onChange={(e) => update(r.id, { value: Number(e.target.value) })}
-              />
-            )}
-            <span className="muted">{meta(r.kind).unit}</span>
-            <button className="icon-btn" onClick={() => setAlertRules(rules.filter((x) => x.id !== r.id))} aria-label="Remove rule">
-              ×
+          <Row key={r.id} className="rule-cell">
+            <span className="rule-main" title={meta(r.kind).label}>
+              <span className="rule-title">{r.kind === 'enter-zone' ? `Enters ${r.label}` : meta(r.kind).short}</span>
+              <span className="rule-sub">
+                {meta(r.kind).needsValue ? (
+                  <>
+                    {RULE_PREFIX[r.kind]}
+                    <input
+                      type="number"
+                      value={r.value}
+                      onChange={(e) => update(r.id, { value: Number(e.target.value) })}
+                      aria-label="Threshold"
+                    />
+                    {meta(r.kind).unit}
+                  </>
+                ) : r.kind === 'squawk-emergency' ? (
+                  '7500 · 7600 · 7700'
+                ) : (
+                  'Area of the map when created'
+                )}
+              </span>
+            </span>
+            <Switch checked={r.enabled} onChange={(v) => update(r.id, { enabled: v })} label={`Enable ${meta(r.kind).label}`} />
+            <button className="mini-button" onClick={() => setAlertRules(rules.filter((x) => x.id !== r.id))} aria-label="Delete rule">
+              <Icon name="trash" size={16} />
             </button>
-          </li>
+          </Row>
         ))}
-      </ul>
-      <fieldset className="fieldset">
-        <legend>New rule</legend>
-        <select value={kind} onChange={(e) => setKind(e.target.value as AlertKind)}>
-          {ALERT_KINDS.map((a) => (
-            <option key={a.kind} value={a.kind}>
-              {a.label}
-            </option>
-          ))}
-        </select>
-        {meta(kind).needsValue && (
-          <label className="field">
-            <span>Threshold ({meta(kind).unit})</span>
-            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-          </label>
-        )}
-        {kind === 'enter-zone' && <p className="hint">The zone is the current map view. Zoom to the area first.</p>}
-        <button className="btn wide" onClick={add}>
-          Add rule
-        </button>
-      </fieldset>
+      </Group>
 
-      <div className="row between">
-        <b>Events</b>
-        {events.length > 0 && (
-          <button className="link-btn" onClick={clearAlerts}>
-            Clear
-          </button>
+      <Group
+        header="New Rule"
+        footer={kind === 'enter-zone' ? 'The zone is the area currently visible on the map.' : undefined}
+      >
+        <Row label="Type">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as AlertKind)}>
+            {ALERT_KINDS.map((a) => (
+              <option key={a.kind} value={a.kind}>
+                {a.short}
+              </option>
+            ))}
+          </Select>
+        </Row>
+        {meta(kind).needsValue && (
+          <Row label={`Threshold (${meta(kind).unit})`}>
+            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} aria-label="New rule threshold" />
+          </Row>
         )}
-      </div>
-      <ul className="event-list">
-        {events.length === 0 && <li className="muted">No alerts yet.</li>}
-        {events.map((e) => (
-          <li key={e.id} className="event" onClick={() => select(e.icao24)}>
-            <span className="muted">{fmtClock(e.at)}</span> <b>{e.callsign ?? e.icao24}</b> {e.message}
-          </li>
+        <Row className="button-cell" onClick={add}>
+          Add Rule
+        </Row>
+      </Group>
+
+      <Group
+        header="Recent"
+        action={
+          events.length > 0 && (
+            <button className="link mini-link" onClick={clearAlerts} style={{ border: 'none', background: 'none', color: 'var(--blue)', fontSize: 13, padding: 0 }}>
+              Clear
+            </button>
+          )
+        }
+      >
+        {events.length === 0 && <div className="empty">No alerts yet.</div>}
+        {events.slice(0, 50).map((e) => (
+          <Row key={e.id} className="event-cell" onClick={() => select(e.icao24)}>
+            <span className="event-top">
+              <b>{e.callsign ?? e.icao24.toUpperCase()}</b>
+              <span className="muted tabular">{fmtClock(e.at)}</span>
+            </span>
+            <span className="event-msg">{e.message}</span>
+          </Row>
         ))}
-      </ul>
-    </div>
+      </Group>
+    </>
   );
 }
-

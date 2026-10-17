@@ -57,15 +57,16 @@ export const fmtClock = (ms: number) =>
 
 /** Colour by altitude band, shared by map, list and legend. */
 export const ALT_BANDS: { maxFt: number; color: string; label: string }[] = [
-  { maxFt: 2_000, color: '#34d399', label: '< 2k' },
-  { maxFt: 10_000, color: '#a3e635', label: '2–10k' },
-  { maxFt: 20_000, color: '#facc15', label: '10–20k' },
-  { maxFt: 30_000, color: '#fb923c', label: '20–30k' },
-  { maxFt: 38_000, color: '#f472b6', label: '30–38k' },
-  { maxFt: Infinity, color: '#a78bfa', label: '38k +' },
+  // Apple system colours: green, mint, yellow, orange, pink, purple
+  { maxFt: 2_000, color: '#30d158', label: '<2k' },
+  { maxFt: 10_000, color: '#63e6e2', label: '10k' },
+  { maxFt: 20_000, color: '#ffd60a', label: '20k' },
+  { maxFt: 30_000, color: '#ff9f0a', label: '30k' },
+  { maxFt: 38_000, color: '#ff375f', label: '38k' },
+  { maxFt: Infinity, color: '#bf5af2', label: '38k+' },
 ];
-export const GROUND_COLOR = '#94a3b8';
-export const UNKNOWN_COLOR = '#cbd5e1';
+export const GROUND_COLOR = '#8e8e93';
+export const UNKNOWN_COLOR = '#c7c7cc';
 
 export function altColor(m: number | null, onGround: boolean): string {
   if (onGround) return GROUND_COLOR;

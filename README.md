@@ -59,6 +59,9 @@ Bonus features:
   zone (the current map view, drawn in orange). Alerts are edge-triggered and appear as a toast, a badge and an event log.
 - **Caching and recovery.** Fresh-TTL cache, stale-cache fallback, recorded fallback, exponential back-off with jitter, and
   `Retry-After` handling.
+- **Apple-style interface.** Built to Apple's Human Interface Guidelines: a full-bleed map with floating translucent
+  panels, SF typography (Inter elsewhere), system colours, segmented controls, inset grouped lists, iOS switches, an
+  Apple Maps–style aircraft card, and a bottom sheet on phones. Light and dark mode, including the basemap, follow the OS.
 - **Resilience testing.** In Region → *Resilience testing* you can inject an OpenSky outage, a 429, recorded data, or a proxy
   failure, without spending credits.
 

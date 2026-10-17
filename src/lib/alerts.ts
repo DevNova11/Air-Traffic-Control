@@ -2,15 +2,26 @@ import { inBBox, M_TO_FT, MS_TO_FPM, MS_TO_KT } from './geo';
 import { trackAltitudeM } from './tracks';
 import type { AlertEvent, AlertKind, AlertRule, Track } from './types';
 
-export const ALERT_KINDS: { kind: AlertKind; label: string; unit: string; needsValue: boolean }[] = [
-  { kind: 'squawk-emergency', label: 'Emergency squawk (7500/7600/7700)', unit: '', needsValue: false },
-  { kind: 'altitude-below', label: 'Airborne below altitude', unit: 'ft', needsValue: true },
-  { kind: 'altitude-above', label: 'Above altitude', unit: 'ft', needsValue: true },
-  { kind: 'speed-above', label: 'Ground speed above', unit: 'kt', needsValue: true },
-  { kind: 'speed-below', label: 'Airborne speed below', unit: 'kt', needsValue: true },
-  { kind: 'vrate-below', label: 'Descent rate steeper than', unit: 'ft/min', needsValue: true },
-  { kind: 'enter-zone', label: 'Enters zone', unit: '', needsValue: false },
+export const ALERT_KINDS: { kind: AlertKind; label: string; short: string; unit: string; needsValue: boolean }[] = [
+  { kind: 'squawk-emergency', label: 'Emergency squawk (7500/7600/7700)', short: 'Emergency squawk', unit: '', needsValue: false },
+  { kind: 'altitude-below', label: 'Airborne below altitude', short: 'Low altitude', unit: 'ft', needsValue: true },
+  { kind: 'altitude-above', label: 'Above altitude', short: 'High altitude', unit: 'ft', needsValue: true },
+  { kind: 'speed-above', label: 'Ground speed above', short: 'High speed', unit: 'kt', needsValue: true },
+  { kind: 'speed-below', label: 'Airborne speed below', short: 'Low speed', unit: 'kt', needsValue: true },
+  { kind: 'vrate-below', label: 'Descent rate steeper than', short: 'Steep descent', unit: 'ft/min', needsValue: true },
+  { kind: 'enter-zone', label: 'Enters zone', short: 'Enters zone', unit: '', needsValue: false },
 ];
+
+/** Short description of what a rule's threshold means, e.g. "below 1,500 ft". */
+export const RULE_PREFIX: Partial<Record<AlertKind, string>> = {
+  'altitude-below': 'Below',
+  'altitude-above': 'Above',
+  'speed-above': 'Above',
+  'speed-below': 'Below',
+  'vrate-below': 'Under',
+};
+
+const n = (v: number) => Math.round(v).toLocaleString('en-US');
 
 const EMERGENCY: Record<string, string> = { '7500': 'hijack', '7600': 'radio failure', '7700': 'general emergency' };
 
@@ -29,22 +40,22 @@ function check(rule: AlertRule, t: Track): string | null {
   const kt = s.velocity === null ? null : s.velocity * MS_TO_KT;
   switch (rule.kind) {
     case 'squawk-emergency':
-      return s.squawk && EMERGENCY[s.squawk] ? `squawking ${s.squawk} (${EMERGENCY[s.squawk]})` : null;
+      return s.squawk && EMERGENCY[s.squawk] ? `Squawking ${s.squawk}, ${EMERGENCY[s.squawk]}` : null;
     case 'altitude-below':
-      return !s.onGround && altFt !== null && altFt < rule.value ? `below ${rule.value} ft (${Math.round(altFt)} ft)` : null;
+      return !s.onGround && altFt !== null && altFt < rule.value ? `At ${n(altFt)} ft, below ${n(rule.value)} ft` : null;
     case 'altitude-above':
-      return altFt !== null && altFt > rule.value ? `above ${rule.value} ft (${Math.round(altFt)} ft)` : null;
+      return altFt !== null && altFt > rule.value ? `At ${n(altFt)} ft, above ${n(rule.value)} ft` : null;
     case 'speed-above':
-      return kt !== null && kt > rule.value ? `faster than ${rule.value} kt (${Math.round(kt)} kt)` : null;
+      return kt !== null && kt > rule.value ? `At ${n(kt)} kt, above ${n(rule.value)} kt` : null;
     case 'speed-below':
-      return !s.onGround && kt !== null && kt < rule.value ? `slower than ${rule.value} kt (${Math.round(kt)} kt)` : null;
+      return !s.onGround && kt !== null && kt < rule.value ? `At ${n(kt)} kt, below ${n(rule.value)} kt` : null;
     case 'vrate-below': {
       const fpm = s.verticalRate === null ? null : s.verticalRate * MS_TO_FPM;
-      return fpm !== null && fpm < rule.value ? `descending at ${Math.round(fpm)} ft/min` : null;
+      return fpm !== null && fpm < rule.value ? `Descending at ${n(-fpm)} ft/min` : null;
     }
     case 'enter-zone':
       return rule.zone && s.lat !== null && s.lon !== null && inBBox(rule.zone, s.lat, s.lon)
-        ? `inside zone ${rule.label ?? ''}`.trim()
+        ? `Entered ${rule.label ?? 'zone'}`
         : null;
   }
 }

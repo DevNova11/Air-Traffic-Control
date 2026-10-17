@@ -1,46 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { ALT_BANDS, GROUND_COLOR } from '@/lib/format';
-import type { AlertEvent } from '@/lib/types';
 import { useTraffic } from '@/store/traffic';
 
 export function Legend() {
   return (
-    <div className="legend">
-      <div className="legend-title">Altitude (ft)</div>
-      <div className="legend-row">
-        <span className="swatch" style={{ background: GROUND_COLOR }} /> Ground
-      </div>
+    <div className="legend glass" aria-label="Altitude legend (feet)">
+      <span className="legend-item">
+        <span className="dot" style={{ background: GROUND_COLOR }} /> Gnd
+      </span>
       {ALT_BANDS.map((b) => (
-        <div key={b.label} className="legend-row">
-          <span className="swatch" style={{ background: b.color }} /> {b.label}
-        </div>
+        <span key={b.label} className="legend-item">
+          <span className="dot" style={{ background: b.color }} /> {b.label}
+        </span>
       ))}
-      <div className="legend-row">
-        <span className="swatch hollow" /> Stale
-      </div>
+      <span className="legend-item">
+        <span className="dot hollow" /> Stale
+      </span>
     </div>
-  );
-}
-
-/** Shows the newest alert for a few seconds. */
-export function AlertToast() {
-  const events = useTraffic((s) => s.alertEvents);
-  const [shown, setShown] = useState<AlertEvent | null>(null);
-
-  useEffect(() => {
-    if (!events.length) return;
-    setShown(events[0]);
-    const id = setTimeout(() => setShown(null), 6000);
-    return () => clearTimeout(id);
-  }, [events]);
-
-  if (!shown) return null;
-  return (
-    <button className="toast" onClick={() => useTraffic.getState().select(shown.icao24)}>
-      <b>Alert</b> {shown.callsign ?? shown.icao24} {shown.message}
-    </button>
   );
 }
 
@@ -51,15 +28,28 @@ export function MapNotice() {
   const count = useTraffic((s) => s.tracks.size);
   const replay = useTraffic((s) => s.replay.active);
   if (count > 0 || replay) return null;
-  if (phase === 'idle' || phase === 'loading') return <div className="map-notice">Loading aircraft…</div>;
-  if (phase === 'error' || phase === 'offline')
+  if (phase === 'idle' || phase === 'loading')
     return (
-      <div className="map-notice">
-        {phase === 'offline' ? 'Offline and no saved data for this region.' : `Could not load aircraft: ${error}`}
-        <br />
-        <span className="muted">Retrying automatically.</span>
+      <div className="map-notice glass">
+        <span className="spinner" />
+        Loading Aircraft
       </div>
     );
-  if (phase === 'live' || phase === 'degraded') return <div className="map-notice">No aircraft in this region right now.</div>;
+  if (phase === 'error' || phase === 'offline')
+    return (
+      <div className="map-notice glass">
+        {phase === 'offline' ? 'Offline' : 'Can’t Load Aircraft'}
+        <span className="muted">
+          {phase === 'offline' ? 'No saved data for this region.' : `${error ?? 'Unknown error'}. Retrying automatically.`}
+        </span>
+      </div>
+    );
+  if (phase === 'live' || phase === 'degraded')
+    return (
+      <div className="map-notice glass">
+        No Aircraft
+        <span className="muted">Nothing is flying in this region right now.</span>
+      </div>
+    );
   return null;
 }

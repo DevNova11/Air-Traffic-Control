@@ -56,6 +56,7 @@ interface TrafficState {
   selectedId: string | null;
   follow: boolean;
   showTrails: boolean;
+  sidebarOpen: boolean;
   replay: ReplayState;
   alertRules: AlertRule[];
   alertEvents: AlertEvent[];
@@ -76,6 +77,7 @@ interface TrafficState {
   select: (id: string | null) => void;
   setFollow: (v: boolean) => void;
   setShowTrails: (v: boolean) => void;
+  setSidebarOpen: (v: boolean) => void;
   setReplay: (p: Partial<ReplayState>) => void;
   setAlertRules: (rules: AlertRule[]) => void;
   clearAlerts: () => void;
@@ -148,6 +150,7 @@ export const useTraffic = create<TrafficState>()((set, get) => ({
   selectedId: null,
   follow: false,
   showTrails: false,
+  sidebarOpen: true,
   replay: { active: false, playing: false, t: 0, speed: 8 },
   alertRules: DEFAULT_RULES,
   alertEvents: [],
@@ -256,6 +259,7 @@ export const useTraffic = create<TrafficState>()((set, get) => ({
   select: (selectedId) => set({ selectedId, follow: selectedId ? get().follow : false }),
   setFollow: (follow) => set({ follow }),
   setShowTrails: (showTrails) => set({ showTrails }),
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setReplay: (p) => set({ replay: { ...get().replay, ...p } }),
   setAlertRules: (alertRules) => {
     lsSet('alertRules', alertRules);

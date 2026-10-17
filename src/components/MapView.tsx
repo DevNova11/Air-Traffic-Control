@@ -21,6 +21,24 @@ const toBounds = (b: BBox): L.LatLngTuple[] => [
   [b.lamax, b.lomax],
 ];
 
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
+const tileUrl = (dark: boolean, layer: 'Base' | 'Reference') =>
+  `${ESRI}/World_${dark ? 'Dark' : 'Light'}_Gray_${layer}/MapServer/tile/{z}/{y}/{x}`;
+
+const LABEL_FONT = '600 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", sans-serif';
+
+/** Keep the region clear of the floating toolbar, sidebar and replay bar when fitting it. */
+function fitOptions(): L.FitBoundsOptions {
+  const open = useTraffic.getState().sidebarOpen;
+  if (window.innerWidth <= 760) {
+    return {
+      paddingTopLeft: [16, 72],
+      paddingBottomRight: [16, open ? window.innerHeight * 0.46 + 16 : 32],
+    };
+  }
+  return { paddingTopLeft: [open ? 380 : 28, 88], paddingBottomRight: [28, 84] };
+}
+
 interface DrawItem {
   id: string;
   lat: number;
@@ -38,23 +56,38 @@ export default function MapView() {
 
   useEffect(() => {
     const container = containerRef.current!;
-    const map = L.map(container, { zoomControl: true, minZoom: 2, worldCopyJump: true, attributionControl: true });
-    // Esri's dark-grey canvas basemap (no API key needed) plus its label layer.
-    const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
-    L.tileLayer(`${esri}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
+    const map = L.map(container, { zoomControl: false, minZoom: 2, worldCopyJump: true, attributionControl: true });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    map.attributionControl.setPrefix(false);
+
+    // Esri grey canvas basemap (no API key needed), light or dark to match the system appearance.
+    const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+    let dark = scheme.matches;
+    const baseLayer = L.tileLayer(tileUrl(dark, 'Base'), {
       attribution:
-        'Basemap &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors · Data: <a href="https://opensky-network.org">OpenSky Network</a>',
+        '&copy; Esri, HERE, Garmin, OpenStreetMap contributors · Data <a href="https://opensky-network.org">OpenSky Network</a>',
       maxZoom: 16,
     }).addTo(map);
-    L.tileLayer(`${esri}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+    const labelLayer = L.tileLayer(tileUrl(dark, 'Reference'), { maxZoom: 16, pane: 'shadowPane' }).addTo(map);
+    const onScheme = (e: MediaQueryListEvent) => {
+      dark = e.matches;
+      baseLayer.setUrl(tileUrl(dark, 'Base'));
+      labelLayer.setUrl(tileUrl(dark, 'Reference'));
+      regionRect.setStyle({ color: dark ? '#0a84ff' : '#007aff' });
+      dirty = true;
+    };
+    scheme.addEventListener('change', onScheme);
 
     const initial = useTraffic.getState().region;
-    map.fitBounds(toBounds(initial.bbox));
+    map.fitBounds(toBounds(initial.bbox), fitOptions());
     const regionRect = L.rectangle(toBounds(initial.bbox), {
-      color: '#38bdf8',
-      weight: 1.5,
-      dashArray: '6 6',
-      fill: false,
+      color: dark ? '#0a84ff' : '#007aff',
+      weight: 2,
+      opacity: 0.8,
+      dashArray: '2 7',
+      lineCap: 'round',
+      fill: true,
+      fillOpacity: 0.035,
       interactive: false,
     }).addTo(map);
     const zoneLayer = L.layerGroup().addTo(map);
@@ -78,7 +111,7 @@ export default function MapView() {
       // The container may have had no size when the map was created; fit the region once it does.
       if (!fitted && size.x > 0 && size.y > 0) {
         fitted = true;
-        map.fitBounds(toBounds(useTraffic.getState().region.bbox));
+        map.fitBounds(toBounds(useTraffic.getState().region.bbox), fitOptions());
       }
       dirty = true;
     };
@@ -179,8 +212,9 @@ export default function MapView() {
         if (dt > 0 && pts.length) {
           const e = map.latLngToContainerPoint([elat, elon]);
           const [lx, ly] = pts[pts.length - 1];
-          ctx.setLineDash([4, 4]);
-          ctx.strokeStyle = '#e2e8f0';
+          ctx.setLineDash([3, 5]);
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.6)';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(lx, ly);
@@ -193,8 +227,9 @@ export default function MapView() {
       hitIds = new Array(items.length);
       hitX = new Float32Array(items.length);
       hitY = new Float32Array(items.length);
-      ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.font = LABEL_FONT;
       ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
 
       items.forEach((it, i) => {
         const p = map.latLngToContainerPoint([it.lat, it.lon]);
@@ -230,7 +265,7 @@ export default function MapView() {
           } else {
             ctx.fillStyle = color;
             ctx.fill(PLANE);
-            ctx.strokeStyle = 'rgba(2,6,23,0.8)';
+            ctx.strokeStyle = dark ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.45)';
             ctx.lineWidth = 0.6 / k;
             ctx.stroke(PLANE);
           }
@@ -238,15 +273,21 @@ export default function MapView() {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         if (selected) {
-          ctx.strokeStyle = '#f8fafc';
-          ctx.lineWidth = 1.5;
+          // Apple Maps–style selection: soft halo plus a crisp ring
+          ctx.fillStyle = dark ? 'rgba(10,132,255,0.22)' : 'rgba(0,122,255,0.16)';
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = dark ? '#0a84ff' : '#007aff';
+          ctx.lineWidth = 2;
           ctx.stroke();
         }
         if ((showLabels || selected) && it.label) {
-          ctx.fillStyle = selected ? '#f8fafc' : 'rgba(226,232,240,0.8)';
-          ctx.fillText(it.label, p.x + 10, p.y - 8);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = dark ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)';
+          ctx.strokeText(it.label, p.x + (selected ? 22 : 10), p.y - (selected ? 0 : 8));
+          ctx.fillStyle = dark ? (selected ? '#ffffff' : 'rgba(255,255,255,0.85)') : selected ? '#000000' : 'rgba(0,0,0,0.75)';
+          ctx.fillText(it.label, p.x + (selected ? 22 : 10), p.y - (selected ? 0 : 8));
         }
       });
 
@@ -322,7 +363,7 @@ export default function MapView() {
       zoneLayer.clearLayers();
       for (const r of rules) {
         if (r.kind === 'enter-zone' && r.zone && r.enabled) {
-          L.rectangle(toBounds(r.zone), { color: '#f97316', weight: 1, fillOpacity: 0.06, interactive: false }).addTo(zoneLayer);
+          L.rectangle(toBounds(r.zone), { color: '#ff9f0a', weight: 1.5, fillOpacity: 0.07, interactive: false }).addTo(zoneLayer);
         }
       }
     };
@@ -331,7 +372,11 @@ export default function MapView() {
     const unsub = useTraffic.subscribe((s, prev) => {
       if (s.region !== prev.region) {
         regionRect.setBounds(L.latLngBounds(toBounds(s.region.bbox)));
-        map.fitBounds(toBounds(s.region.bbox));
+        map.flyToBounds(toBounds(s.region.bbox), { ...fitOptions(), duration: 0.8 });
+      }
+      if (s.sidebarOpen !== prev.sidebarOpen && window.innerWidth <= 760) {
+        // On phones the sheet covers the lower half: keep the region visible above it.
+        map.flyToBounds(toBounds(s.region.bbox), { ...fitOptions(), duration: 0.5 });
       }
       if (s.alertRules !== prev.alertRules) drawZones(s.alertRules);
       if (s.selectedId !== prev.selectedId && s.selectedId) {
@@ -348,6 +393,7 @@ export default function MapView() {
 
     return () => {
       cancelAnimationFrame(raf);
+      scheme.removeEventListener('change', onScheme);
       unsub();
       ro.disconnect();
       map.remove();
@@ -359,7 +405,7 @@ export default function MapView() {
   return (
     <div className="map-wrap">
       <div ref={containerRef} className="map" />
-      <div ref={tooltipRef} className="map-tooltip" />
+      <div ref={tooltipRef} className="map-tooltip glass" />
     </div>
   );
 }
