@@ -6,6 +6,12 @@ observed, and set up alerts. It keeps working when OpenSky is slow, stale, rate-
 
 **Live demo:** https://air-traffic-control-omega.vercel.app
 
+> **Note:** The hosted demo runs on **recorded OpenSky data**. OpenSky doesn't accept connections from Vercel's
+> servers: every request from the deployed proxy times out (`UND_ERR_CONNECT_TIMEOUT`). The app detects this and falls back
+> to recorded responses, and the status bar shows *Recording* as the source. That fallback is the same failure handling
+> described in [docs/RESILIENCE.md](docs/RESILIENCE.md). To see **live data**, run the app locally (see Quick start below),
+> where the proxy reaches OpenSky directly.
+
 **Stack:** Next.js 15 (App Router) · TypeScript · Leaflet (custom canvas layer) · Zustand · IndexedDB
 
 ---
